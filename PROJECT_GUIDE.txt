@@ -1,0 +1,1328 @@
+================================================================================
+   BANKING SYSTEM MICROSERVICES - COMPLETE PROJECT GUIDE
+================================================================================
+   Project  : Banking System Microservices
+   Tech     : Spring Boot 3.2.5, Spring Cloud 2023.0.1, MySQL, JWT, Swagger
+   Java     : 17
+   Author   : Mahek
+   Date     : February 2026
+================================================================================
+
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+  1.  DATABASE SETUP (MySQL) - Step by Step
+  2.  TABLES CREATED IN MYSQL (Per Service)
+  3.  APPLICATION PROPERTIES EXPLAINED
+  4.  TESTING - Unit Tests, Types & How to Run
+  5.  POSTMAN TESTING - Complete Guide with Examples
+  6.  PROJECT ROADMAP
+  7.  APPLICATION FLOW - Input to Output
+  8.  SERVICE CONNECTIVITY & COMMUNICATION
+  9.  CONTROLLER INFORMATION (All Services)
+  10. METHODS USED & HOW SERVICES CONNECT
+  11. EUREKA & SERVICE DISCOVERY EXPLAINED
+  12. POSTMAN OUTPUT FOR EACH SERVER
+  13. SWAGGER UI LINKS
+
+
+================================================================================
+1. DATABASE SETUP (MySQL) - STEP BY STEP
+================================================================================
+
+PREREQUISITE: MySQL must be installed and running on your machine.
+
+STEP 1: Open Terminal and login to MySQL
+------------------------------------------------------------------------
+   mysql -u root -p
+   (Enter your password when prompted. Default password used: root)
+
+STEP 2: Create the three databases (one per service)
+------------------------------------------------------------------------
+   CREATE DATABASE IF NOT EXISTS accountsdb;
+   CREATE DATABASE IF NOT EXISTS customersdb;
+   CREATE DATABASE IF NOT EXISTS transactionsdb;
+
+STEP 3: Verify the databases are created
+------------------------------------------------------------------------
+   SHOW DATABASES;
+
+   Expected Output:
+   +--------------------+
+   | Database           |
+   +--------------------+
+   | accountsdb         |
+   | customersdb        |
+   | information_schema |
+   | mysql              |
+   | performance_schema |
+   | sys                |
+   | transactionsdb     |
+   +--------------------+
+
+STEP 4: Tables are AUTO-CREATED by Hibernate
+------------------------------------------------------------------------
+   You do NOT need to create tables manually.
+   Because application.properties has:
+       spring.jpa.hibernate.ddl-auto=update
+
+   This means when the Spring Boot service starts, Hibernate reads the
+   @Entity Java classes and automatically creates the corresponding
+   tables in MySQL. If the tables already exist, it updates them.
+
+STEP 5: Verify tables after services start
+------------------------------------------------------------------------
+   USE accountsdb;
+   SHOW TABLES;
+   -- Output: accounts
+
+   USE customersdb;
+   SHOW TABLES;
+   -- Output: customers
+
+   USE transactionsdb;
+   SHOW TABLES;
+   -- Output: transactions
+
+STEP 6: Check table structure
+------------------------------------------------------------------------
+   DESCRIBE accountsdb.accounts;
+   +----------------+---------------+------+-----+---------+----------------+
+   | Field          | Type          | Null | Key | Default | Extra          |
+   +----------------+---------------+------+-----+---------+----------------+
+   | id             | bigint        | NO   | PRI | NULL    | auto_increment |
+   | account_number | varchar(20)   | NO   | UNI | NULL    |                |
+   | customer_id    | bigint        | NO   |     | NULL    |                |
+   | type           | varchar(50)   | NO   |     | NULL    |                |
+   | balance        | decimal(15,2) | NO   |     | NULL    |                |
+   | created_at     | datetime(6)   | NO   |     | NULL    |                |
+   +----------------+---------------+------+-----+---------+----------------+
+
+   DESCRIBE customersdb.customers;
+   +------------+--------------+------+-----+---------+----------------+
+   | Field      | Type         | Null | Key | Default | Extra          |
+   +------------+--------------+------+-----+---------+----------------+
+   | id         | bigint       | NO   | PRI | NULL    | auto_increment |
+   | first_name | varchar(100) | NO   |     | NULL    |                |
+   | last_name  | varchar(100) | NO   |     | NULL    |                |
+   | email      | varchar(100) | NO   | UNI | NULL    |                |
+   | phone      | varchar(20)  | NO   |     | NULL    |                |
+   | address    | varchar(250) | NO   |     | NULL    |                |
+   | created_at | datetime(6)  | NO   |     | NULL    |                |
+   +------------+--------------+------+-----+---------+----------------+
+
+   DESCRIBE transactionsdb.transactions;
+   +------------------+---------------+------+-----+---------+----------------+
+   | Field            | Type          | Null | Key | Default | Extra          |
+   +------------------+---------------+------+-----+---------+----------------+
+   | id               | bigint        | NO   | PRI | NULL    | auto_increment |
+   | account_id       | bigint        | NO   |     | NULL    |                |
+   | type             | varchar(50)   | NO   |     | NULL    |                |
+   | amount           | decimal(15,2) | NO   |     | NULL    |                |
+   | transaction_date | datetime(6)   | NO   |     | NULL    |                |
+   | status           | varchar(50)   | NO   |     | NULL    |                |
+   +------------------+---------------+------+-----+---------+----------------+
+
+STEP 7: View data in tables
+------------------------------------------------------------------------
+   SELECT * FROM accountsdb.accounts;
+   SELECT * FROM customersdb.customers;
+   SELECT * FROM transactionsdb.transactions;
+
+
+================================================================================
+2. TABLES CREATED IN MYSQL (Per Service)
+================================================================================
+
+ACCOUNTS SERVICE -> Database: accountsdb -> Table: accounts
+------------------------------------------------------------------------
+   Mapped from Java Entity: com.banking.accounts.entity.Account
+   Fields:
+   - id              (BIGINT, PK, AUTO_INCREMENT) -> @Id @GeneratedValue
+   - account_number  (VARCHAR(20), UNIQUE, NOT NULL)
+   - customer_id     (BIGINT, NOT NULL) -> references customer in customersdb
+   - type            (VARCHAR(50), NOT NULL) -> SAVINGS, CURRENT, etc.
+   - balance         (DECIMAL(15,2), NOT NULL) -> account balance
+   - created_at      (DATETIME, NOT NULL) -> auto-set on creation
+
+CUSTOMERS SERVICE -> Database: customersdb -> Table: customers
+------------------------------------------------------------------------
+   Mapped from Java Entity: com.banking.customers.entity.Customer
+   Fields:
+   - id              (BIGINT, PK, AUTO_INCREMENT) -> @Id @GeneratedValue
+   - first_name      (VARCHAR(100), NOT NULL)
+   - last_name       (VARCHAR(100), NOT NULL)
+   - email           (VARCHAR(100), UNIQUE, NOT NULL)
+   - phone           (VARCHAR(20), NOT NULL)
+   - address         (VARCHAR(250), NOT NULL)
+   - created_at      (DATETIME, NOT NULL) -> auto-set on creation
+
+TRANSACTIONS SERVICE -> Database: transactionsdb -> Table: transactions
+------------------------------------------------------------------------
+   Mapped from Java Entity: com.banking.transactions.entity.Transaction
+   Fields:
+   - id                (BIGINT, PK, AUTO_INCREMENT) -> @Id @GeneratedValue
+   - account_id        (BIGINT, NOT NULL) -> references account in accountsdb
+   - type              (VARCHAR(50), NOT NULL) -> DEPOSIT, WITHDRAWAL, TRANSFER
+   - amount            (DECIMAL(15,2), NOT NULL) -> transaction amount
+   - transaction_date  (DATETIME, NOT NULL) -> auto-set on creation
+   - status            (VARCHAR(50), NOT NULL) -> SUCCESS, PENDING, CANCELLED
+
+
+================================================================================
+3. APPLICATION PROPERTIES EXPLAINED
+================================================================================
+
+Each service has: src/main/resources/application.properties
+
+ACCOUNTS SERVICE (application.properties):
+------------------------------------------------------------------------
+   # Application Name - Used by Eureka for service registration
+   spring.application.name=accounts-service
+
+   # Server runs on port 8081
+   server.port=8081
+
+   # MySQL Database Connection
+   spring.datasource.url=jdbc:mysql://localhost:3306/accountsdb?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+   spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+   spring.datasource.username=root
+   spring.datasource.password=root
+
+   # JPA/Hibernate - auto creates/updates tables from Entity classes
+   spring.jpa.hibernate.ddl-auto=update
+   spring.jpa.show-sql=true                              -> prints SQL queries in console
+   spring.jpa.database-platform=org.hibernate.dialect.MySQLDialect
+   spring.jpa.properties.hibernate.format_sql=true       -> formats SQL output
+
+   # Eureka - registers this service with Eureka Server
+   eureka.client.service-url.defaultZone=http://localhost:8761/eureka/
+   eureka.instance.prefer-ip-address=true
+
+   # Swagger OpenAPI documentation paths
+   springdoc.api-docs.path=/api-docs
+   springdoc.swagger-ui.path=/swagger-ui.html
+
+   # JWT Security Configuration
+   jwt.secret=YmFua2luZ...  (Base64-encoded secret key)
+   jwt.expiration=86400000   (token valid for 24 hours = 86400000 ms)
+
+   # Logging - DEBUG level for this package
+   logging.level.com.banking.accounts=DEBUG
+
+   The same pattern applies to:
+   - customers-service  (port 8082, database: customersdb)
+   - transactions-service (port 8083, database: transactionsdb)
+
+EUREKA SERVER (application.properties):
+------------------------------------------------------------------------
+   server.port=8761
+   spring.application.name=eureka-server
+   eureka.client.register-with-eureka=false   -> does not register itself
+   eureka.client.fetch-registry=false         -> does not fetch other registries
+
+API GATEWAY (application.properties):
+------------------------------------------------------------------------
+   server.port=8080
+   spring.application.name=api-gateway
+   # Routes - maps URL patterns to service names
+   spring.cloud.gateway.routes[0].id=accounts-service
+   spring.cloud.gateway.routes[0].uri=lb://ACCOUNTS-SERVICE     -> load balanced
+   spring.cloud.gateway.routes[0].predicates[0]=Path=/api/accounts/**
+
+   (Similar routes for customers, transactions)
+
+
+================================================================================
+4. TESTING - UNIT TESTS, TYPES & HOW TO RUN
+================================================================================
+
+TYPES OF TESTS IN THIS PROJECT:
+------------------------------------------------------------------------
+
+A) SERVICE LAYER TESTS (Unit Tests)
+   - Test business logic in *ServiceImpl classes
+   - Mock the repository (database layer) using Mockito
+   - Do NOT start the Spring context or database
+   - Verify service methods work correctly in isolation
+   - Files:
+     * AccountServiceImplTest.java   (8 tests)
+     * CustomerServiceImplTest.java  (7 tests)
+     * TransactionServiceImplTest.java (6 tests)
+
+   What they test:
+   - createAccount() -> creates and returns saved account
+   - getAccountById() -> returns account when found
+   - getAccountById() -> throws ResourceNotFoundException when not found
+   - getAllAccounts() -> returns list of all accounts
+   - updateAccount() -> updates and returns updated account
+   - deleteAccount() -> deletes account by ID
+   - deleteAccount() -> throws exception for non-existent ID
+   - createAccount() -> throws AccountAlreadyExistsException for duplicate
+
+B) CONTROLLER LAYER TESTS (Integration Tests)
+   - Test REST endpoints using MockMvc
+   - Mock the service layer using @MockBean
+   - Verify HTTP status codes, response bodies, content types
+   - Security is disabled for testing (SecurityFilterChain mocked)
+   - Files:
+     * AccountControllerTest.java    (8 tests)
+     * CustomerControllerTest.java   (6 tests)
+     * TransactionControllerTest.java (7 tests)
+
+   What they test:
+   - POST /api/accounts -> returns 201 Created
+   - GET /api/accounts/{id} -> returns 200 OK with account
+   - GET /api/accounts -> returns 200 OK with list
+   - PUT /api/accounts/{id} -> returns 200 OK with updated data
+   - DELETE /api/accounts/{id} -> returns 200 OK
+   - GET /api/accounts/{id} -> returns 404 for non-existent
+
+HOW TO RUN ALL TESTS:
+------------------------------------------------------------------------
+
+   Run ALL tests for a specific service:
+   cd accounts-service
+   mvn test
+
+   Run ALL tests for all services (from project root):
+   cd banking-system
+   cd accounts-service && mvn test && cd ..
+   cd customers-service && mvn test && cd ..
+   cd transactions-service && mvn test && cd ..
+
+   Run a specific test class:
+   mvn test -Dtest=AccountControllerTest
+   mvn test -Dtest=AccountServiceImplTest
+
+   Run a specific test method:
+   mvn test -Dtest=AccountServiceImplTest#testCreateAccount
+
+   Run with verbose output:
+   mvn test -X
+
+EXPECTED TEST RESULTS:
+------------------------------------------------------------------------
+   Accounts Service:    Tests run: 16, Failures: 0, Errors: 0
+   Customers Service:   Tests run: 14, Failures: 0, Errors: 0  (13-14)
+   Transactions Service: Tests run: 13, Failures: 0, Errors: 0
+   -------------------------------------------------------
+   TOTAL:               43 tests, all passing
+
+TECHNOLOGIES USED FOR TESTING:
+------------------------------------------------------------------------
+   - JUnit 5 (Jupiter)       -> Test framework (@Test, @BeforeEach)
+   - Mockito                 -> Mocking (@Mock, @InjectMocks, when().thenReturn())
+   - MockMvc                 -> HTTP testing (perform(), andExpect())
+   - @WebMvcTest             -> Loads only controller layer
+   - @ExtendWith(MockitoExtension.class) -> Enables Mockito in JUnit 5
+   - ObjectMapper            -> JSON serialization for request bodies
+
+
+================================================================================
+5. POSTMAN TESTING - COMPLETE GUIDE WITH EXAMPLES
+================================================================================
+
+SETUP IN POSTMAN:
+------------------------------------------------------------------------
+   1. Open Postman
+   2. Create a new Collection called "Banking System"
+   3. Create folders: Authentication, Accounts, Customers, Transactions
+   4. For all authenticated requests, add Header:
+      Key: Authorization
+      Value: Bearer <your_jwt_token>
+
+------------------------------------------------------------------------
+STEP 1: LOGIN (Get JWT Token) - DO THIS FIRST FOR EACH SERVICE
+------------------------------------------------------------------------
+
+   POST http://localhost:8081/api/auth/login
+   Headers:
+      Content-Type: application/json
+   Body (raw JSON):
+   {
+       "username": "admin",
+       "password": "admin123"
+   }
+
+   Expected Response (200 OK):
+   {
+       "token": "eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJhZG1pbiIsImlhdCI6MTczOTY0..."
+   }
+
+   IMPORTANT: Copy the token value. You will need it for ALL other requests.
+   Paste it in the Authorization header as: Bearer <token>
+
+   NOTE: Each service has its own /api/auth/login endpoint.
+   - Accounts:     POST http://localhost:8081/api/auth/login
+   - Customers:    POST http://localhost:8082/api/auth/login
+   - Transactions: POST http://localhost:8083/api/auth/login
+   Credentials are same for all: admin / admin123
+
+------------------------------------------------------------------------
+STEP 2: ACCOUNTS SERVICE (Port 8081)
+------------------------------------------------------------------------
+
+   A) CREATE ACCOUNT
+      POST http://localhost:8081/api/accounts
+      Headers:
+         Content-Type: application/json
+         Authorization: Bearer <token>
+      Body:
+      {
+          "accountNumber": "ACC-001",
+          "type": "SAVINGS",
+          "balance": 5000.00,
+          "customerId": 1,
+          "status": "ACTIVE"
+      }
+      Expected Response (201 Created):
+      {
+          "id": 1,
+          "accountNumber": "ACC-001",
+          "customerId": 1,
+          "type": "SAVINGS",
+          "balance": 5000.00,
+          "createdAt": "2026-02-15T23:55:58.725997"
+      }
+
+   B) GET ALL ACCOUNTS
+      GET http://localhost:8081/api/accounts
+      Headers:
+         Authorization: Bearer <token>
+      Expected Response (200 OK):
+      [
+          {
+              "id": 1,
+              "accountNumber": "ACC-001",
+              "customerId": 1,
+              "type": "SAVINGS",
+              "balance": 5000.00,
+              "createdAt": "2026-02-15T23:55:58.725997"
+          }
+      ]
+
+   C) GET ACCOUNT BY ID
+      GET http://localhost:8081/api/accounts/1
+      Headers:
+         Authorization: Bearer <token>
+      Expected Response (200 OK):
+      {
+          "id": 1,
+          "accountNumber": "ACC-001",
+          "customerId": 1,
+          "type": "SAVINGS",
+          "balance": 5000.00,
+          "createdAt": "2026-02-15T23:55:58.725997"
+      }
+
+   D) GET ACCOUNT BY ACCOUNT NUMBER
+      GET http://localhost:8081/api/accounts/number/ACC-001
+      Headers:
+         Authorization: Bearer <token>
+      Expected Response (200 OK): (same as above)
+
+   E) GET ACCOUNTS BY CUSTOMER ID
+      GET http://localhost:8081/api/accounts/customer/1
+      Headers:
+         Authorization: Bearer <token>
+      Expected Response (200 OK):
+      [
+          {
+              "id": 1,
+              "accountNumber": "ACC-001",
+              "customerId": 1,
+              "type": "SAVINGS",
+              "balance": 5000.00,
+              "createdAt": "2026-02-15T23:55:58.725997"
+          }
+      ]
+
+   F) UPDATE ACCOUNT
+      PUT http://localhost:8081/api/accounts/1
+      Headers:
+         Content-Type: application/json
+         Authorization: Bearer <token>
+      Body:
+      {
+          "accountNumber": "ACC-001",
+          "type": "CURRENT",
+          "balance": 7500.00,
+          "customerId": 1,
+          "status": "ACTIVE"
+      }
+      Expected Response (200 OK):
+      {
+          "id": 1,
+          "accountNumber": "ACC-001",
+          "customerId": 1,
+          "type": "CURRENT",
+          "balance": 7500.00,
+          "createdAt": "2026-02-15T23:55:58.725997"
+      }
+
+   G) DELETE ACCOUNT
+      DELETE http://localhost:8081/api/accounts/1
+      Headers:
+         Authorization: Bearer <token>
+      Expected Response (200 OK):
+      "Account deleted successfully with ID: 1"
+
+   H) GET ACCOUNT WITH CUSTOMER INFO (Service-to-Service)
+      GET http://localhost:8081/api/accounts/1/with-customer
+      Headers:
+         Authorization: Bearer <token>
+      Expected Response (200 OK):
+      {
+          "id": 1,
+          "accountNumber": "ACC-001",
+          "type": "SAVINGS",
+          "balance": 5000.00,
+          "createdAt": "2026-02-15T23:55:58.725997",
+          "customerInfo": {
+              "customerId": 1,
+              "firstName": "Mahek",
+              "lastName": "Sharma",
+              "email": "mahek@example.com"
+          }
+      }
+
+------------------------------------------------------------------------
+STEP 3: CUSTOMERS SERVICE (Port 8082)
+------------------------------------------------------------------------
+
+   A) CREATE CUSTOMER
+      POST http://localhost:8082/api/customers
+      Headers:
+         Content-Type: application/json
+         Authorization: Bearer <token from 8082 login>
+      Body:
+      {
+          "firstName": "Mahek",
+          "lastName": "Sharma",
+          "email": "mahek@example.com",
+          "phone": "9876543210",
+          "address": "Mumbai, India"
+      }
+      Expected Response (201 Created):
+      {
+          "id": 1,
+          "firstName": "Mahek",
+          "lastName": "Sharma",
+          "email": "mahek@example.com",
+          "phone": "9876543210",
+          "address": "Mumbai, India",
+          "createdAt": "2026-02-15T23:55:59.325157"
+      }
+
+   B) GET ALL CUSTOMERS
+      GET http://localhost:8082/api/customers
+      Headers:
+         Authorization: Bearer <token>
+      Expected Response (200 OK):
+      [
+          {
+              "id": 1,
+              "firstName": "Mahek",
+              "lastName": "Sharma",
+              "email": "mahek@example.com",
+              "phone": "9876543210",
+              "address": "Mumbai, India",
+              "createdAt": "2026-02-15T23:55:59.325157"
+          }
+      ]
+
+   C) GET CUSTOMER BY ID
+      GET http://localhost:8082/api/customers/1
+      Headers:
+         Authorization: Bearer <token>
+
+   D) GET CUSTOMER BY EMAIL
+      GET http://localhost:8082/api/customers/email/mahek@example.com
+      Headers:
+         Authorization: Bearer <token>
+
+   E) UPDATE CUSTOMER
+      PUT http://localhost:8082/api/customers/1
+      Headers:
+         Content-Type: application/json
+         Authorization: Bearer <token>
+      Body:
+      {
+          "firstName": "Mahek",
+          "lastName": "Sharma",
+          "email": "mahek.updated@example.com",
+          "phone": "9876543210",
+          "address": "Delhi, India"
+      }
+      Expected Response (200 OK):
+      {
+          "id": 1,
+          "firstName": "Mahek",
+          "lastName": "Sharma",
+          "email": "mahek.updated@example.com",
+          "phone": "9876543210",
+          "address": "Delhi, India",
+          "createdAt": "2026-02-15T23:55:59.325157"
+      }
+
+   F) DELETE CUSTOMER
+      DELETE http://localhost:8082/api/customers/1
+      Headers:
+         Authorization: Bearer <token>
+      Expected Response (200 OK):
+      "Customer deleted successfully with ID: 1"
+
+   G) GET CUSTOMER MINIMAL INFO (for other services)
+      GET http://localhost:8082/api/customers/1/info
+      Headers:
+         Authorization: Bearer <token>
+      Expected Response (200 OK):
+      {
+          "customerId": 1,
+          "firstName": "Mahek",
+          "lastName": "Sharma",
+          "email": "mahek@example.com"
+      }
+
+   H) GET CUSTOMER WITH ACCOUNTS (Service-to-Service)
+      GET http://localhost:8082/api/customers/1/with-accounts
+      Headers:
+         Authorization: Bearer <token>
+      Expected Response (200 OK):
+      {
+          "id": 1,
+          "firstName": "Mahek",
+          "lastName": "Sharma",
+          "email": "mahek@example.com",
+          "accounts": [
+              {
+                  "accountId": 1,
+                  "accountNumber": "ACC-001",
+                  "type": "SAVINGS",
+                  "balance": 5000.00
+              }
+          ]
+      }
+
+------------------------------------------------------------------------
+STEP 4: TRANSACTIONS SERVICE (Port 8083)
+------------------------------------------------------------------------
+
+   A) CREATE TRANSACTION
+      POST http://localhost:8083/api/transactions
+      Headers:
+         Content-Type: application/json
+         Authorization: Bearer <token from 8083 login>
+      Body:
+      {
+          "accountId": 1,
+          "type": "DEPOSIT",
+          "amount": 1500.00,
+          "status": "COMPLETED"
+      }
+      Expected Response (201 Created):
+      {
+          "id": 1,
+          "accountId": 1,
+          "type": "DEPOSIT",
+          "amount": 1500.00,
+          "transactionDate": "2026-02-15T23:55:59.783241",
+          "status": "COMPLETED"
+      }
+
+   B) GET ALL TRANSACTIONS
+      GET http://localhost:8083/api/transactions
+      Headers:
+         Authorization: Bearer <token>
+
+   C) GET TRANSACTION BY ID
+      GET http://localhost:8083/api/transactions/1
+      Headers:
+         Authorization: Bearer <token>
+
+   D) GET TRANSACTIONS BY ACCOUNT ID
+      GET http://localhost:8083/api/transactions/account/1
+      Headers:
+         Authorization: Bearer <token>
+      Expected Response (200 OK):
+      [
+          {
+              "id": 1,
+              "accountId": 1,
+              "type": "DEPOSIT",
+              "amount": 1500.00,
+              "transactionDate": "2026-02-15T23:55:59.783241",
+              "status": "COMPLETED"
+          }
+      ]
+
+   E) GET TRANSACTIONS BY STATUS
+      GET http://localhost:8083/api/transactions/status/COMPLETED
+      Headers:
+         Authorization: Bearer <token>
+
+   F) UPDATE TRANSACTION (Only PENDING or SCHEDULED)
+      PUT http://localhost:8083/api/transactions/1
+      Headers:
+         Content-Type: application/json
+         Authorization: Bearer <token>
+      Body:
+      {
+          "accountId": 1,
+          "type": "WITHDRAWAL",
+          "amount": 500.00,
+          "status": "PENDING"
+      }
+      NOTE: Returns 400 error if transaction status is already COMPLETED/SUCCESS.
+
+   G) CANCEL TRANSACTION
+      DELETE http://localhost:8083/api/transactions/1
+      Headers:
+         Authorization: Bearer <token>
+      Expected Response (200 OK):
+      "Transaction cancelled successfully with ID: 1"
+      NOTE: Completed/Success transactions CANNOT be cancelled (returns 400).
+
+   H) GET TRANSACTION WITH ACCOUNT INFO (Service-to-Service)
+      GET http://localhost:8083/api/transactions/1/with-account
+      Headers:
+         Authorization: Bearer <token>
+      Expected Response (200 OK):
+      {
+          "id": 1,
+          "type": "DEPOSIT",
+          "amount": 1500.00,
+          "transactionDate": "2026-02-15T23:55:59.783241",
+          "status": "COMPLETED",
+          "accountInfo": {
+              "accountId": 1,
+              "accountNumber": "ACC-001",
+              "type": "SAVINGS",
+              "balance": 5000.00
+          }
+      }
+
+------------------------------------------------------------------------
+STEP 6: API GATEWAY (Port 8080) - Unified Access
+------------------------------------------------------------------------
+
+   Instead of calling each service directly, you can route through
+   the API Gateway on port 8080:
+
+   GET  http://localhost:8080/api/accounts        -> routes to 8081
+   GET  http://localhost:8080/api/customers        -> routes to 8082
+   GET  http://localhost:8080/api/transactions     -> routes to 8083
+
+   The gateway routes are configured via:
+   spring.cloud.gateway.routes[0].uri=lb://ACCOUNTS-SERVICE
+   spring.cloud.gateway.routes[0].predicates[0]=Path=/api/accounts/**
+
+   "lb://" means Load Balanced - it uses Eureka to discover the service.
+
+
+================================================================================
+6. PROJECT ROADMAP
+================================================================================
+
+PHASE 1: FOUNDATION (Completed)
+------------------------------------------------------------------------
+   - Set up Eureka Server for service discovery
+   - Set up API Gateway for unified routing
+   - Created project structure for all 5 microservices
+   - Configured MySQL databases for data persistence
+
+PHASE 2: CORE SERVICES (Completed)
+------------------------------------------------------------------------
+   - Accounts Service: Full CRUD for bank accounts
+   - Customers Service: Full CRUD for customer profiles
+   - Transactions Service: Full CRUD for banking transactions
+   - Each service has:
+     * Layered architecture (Controller -> Service -> DAO -> Entity)
+     * DTO pattern (never expose entities directly)
+     * Input validation (@Valid, @NotBlank, @Size, etc.)
+     * Global exception handling (ResourceNotFoundException, etc.)
+     * schema.sql for reference
+
+PHASE 3: SECURITY (Completed)
+------------------------------------------------------------------------
+   - JWT-based authentication on all core services
+   - SecurityConfig with filter chain
+   - JwtAuthenticationFilter intercepts every request
+   - JwtUtil generates and validates tokens
+   - In-memory user: admin / admin123
+   - Public endpoints: /api/auth/**, /swagger-ui/**, /api-docs/**
+   - All other endpoints require Bearer token
+
+PHASE 4: SERVICE-TO-SERVICE COMMUNICATION (Completed)
+------------------------------------------------------------------------
+   - Accounts Service calls Customers Service (get customer info)
+   - Customers Service calls Accounts Service (get account list)
+   - Transactions Service calls Accounts Service (get account info)
+   - Communication via RestTemplate (HTTP calls between services)
+
+PHASE 5: DOCUMENTATION & TESTING (Completed)
+------------------------------------------------------------------------
+   - Swagger UI on all services (springdoc-openapi)
+   - Unit tests: Service layer (Mockito) + Controller layer (MockMvc)
+   - 43 total tests across 3 services
+   - README.md with full documentation
+   - This PROJECT_GUIDE.txt
+
+
+================================================================================
+7. APPLICATION FLOW - INPUT TO OUTPUT
+================================================================================
+
+COMPLETE REQUEST FLOW (Example: Create Account):
+------------------------------------------------------------------------
+
+   1. USER (Postman/Browser)
+      |
+      | Sends: POST http://localhost:8081/api/accounts
+      |         Header: Authorization: Bearer <JWT_TOKEN>
+      |         Body: {"accountNumber":"ACC-001","type":"SAVINGS","balance":5000}
+      |
+      v
+   2. SPRING SECURITY FILTER CHAIN
+      |
+      | JwtAuthenticationFilter intercepts the request
+      |   -> Extracts "Bearer <token>" from Authorization header
+      |   -> Calls JwtUtil.extractUsername(token) to get username
+      |   -> Calls UserDetailsService.loadUserByUsername("admin")
+      |   -> Calls JwtUtil.validateToken(token, username)
+      |   -> If valid: Sets SecurityContext with authenticated user
+      |   -> If invalid: Returns 401 Unauthorized
+      |
+      v
+   3. ACCOUNT CONTROLLER (@RestController)
+      |
+      | @PostMapping receives the request
+      | @Valid validates the DTO (checks @NotBlank, @Size, @DecimalMin)
+      | If validation fails: Returns 400 Bad Request with field errors
+      | Calls: accountService.createAccount(accountDTO)
+      |
+      v
+   4. ACCOUNT SERVICE IMPL (@Service)
+      |
+      | Business Logic:
+      |   -> Checks if accountNumber already exists in database
+      |   -> If duplicate: throws AccountAlreadyExistsException (409)
+      |   -> Converts DTO to Entity using AccountMapper
+      |   -> Sets createdAt = LocalDateTime.now()
+      |   -> Calls accountRepository.save(account)
+      |
+      v
+   5. ACCOUNT REPOSITORY (JPA/DAO Layer)
+      |
+      | Spring Data JPA auto-generates SQL:
+      |   INSERT INTO accounts (account_number, customer_id, type, balance, created_at)
+      |   VALUES ('ACC-001', 1, 'SAVINGS', 5000.00, '2026-02-15 23:55:58')
+      |
+      v
+   6. MYSQL DATABASE (accountsdb)
+      |
+      | Row inserted into 'accounts' table
+      | Auto-generated ID returned
+      |
+      v
+   7. RESPONSE TRAVELS BACK
+      |
+      | Repository -> returns saved Account entity
+      | Service -> converts Entity to DTO using AccountMapper
+      | Controller -> wraps in ResponseEntity with 201 CREATED status
+      |
+      v
+   8. USER RECEIVES RESPONSE
+      {
+          "id": 1,
+          "accountNumber": "ACC-001",
+          "customerId": 1,
+          "type": "SAVINGS",
+          "balance": 5000.00,
+          "createdAt": "2026-02-15T23:55:58.725997"
+      }
+
+
+SERVICE-TO-SERVICE FLOW (Example: Get Account with Customer Info):
+------------------------------------------------------------------------
+
+   1. User -> GET /api/accounts/1/with-customer (Accounts Service :8081)
+   2. AccountController receives request
+   3. AccountServiceImpl.getAccountWithCustomerInfo(1) is called
+   4. Fetches Account from accountsdb via AccountRepository
+   5. Makes HTTP call: RestTemplate.getForObject(
+        "http://localhost:8082/api/customers/1/info", CustomerInfoDTO.class)
+   6. Customers Service (:8082) receives the internal request
+   7. CustomerController.getCustomerInfo(1) is called
+   8. CustomerServiceImpl fetches Customer from customersdb
+   9. Returns CustomerInfoDTO {customerId, firstName, lastName, email}
+   10. Accounts Service combines Account data + Customer data
+   11. Returns AccountWithCustomerDTO to user
+
+
+================================================================================
+8. SERVICE CONNECTIVITY & COMMUNICATION
+================================================================================
+
+HOW SERVICES CONNECT TO EACH OTHER:
+------------------------------------------------------------------------
+
+   +-------------------+     RestTemplate      +--------------------+
+   | ACCOUNTS SERVICE  | ------------------->  | CUSTOMERS SERVICE  |
+   | (Port 8081)       |   GET /api/customers  | (Port 8082)        |
+   |                   |        /1/info        |                    |
+   +-------------------+                       +--------------------+
+          ^                                            |
+          |   RestTemplate                             |   RestTemplate
+          |   GET /api/accounts/customer/1             |
+          |                                            v
+   +-------------------+                       +--------------------+
+   | TRANSACTIONS SVC  |                       | ACCOUNTS SERVICE   |
+   | (Port 8083)       | ---RestTemplate--->   | (Port 8081)        |
+   |                   |   GET /api/accounts/1 |                    |
+   +-------------------+                       +--------------------+
+
+COMMUNICATION MAP:
+------------------------------------------------------------------------
+   Accounts Service (8081)  --> calls --> Customers Service (8082)
+      Endpoint called: GET http://localhost:8082/api/customers/{id}/info
+      Purpose: Get customer name & email for account display
+      Used in: AccountServiceImpl.getAccountWithCustomerInfo()
+
+   Customers Service (8082) --> calls --> Accounts Service (8081)
+      Endpoint called: GET http://localhost:8081/api/accounts/customer/{id}
+      Purpose: Get list of accounts for a customer
+      Used in: CustomerServiceImpl.getCustomerWithAccounts()
+
+   Transactions Service (8083) --> calls --> Accounts Service (8081)
+      Endpoint called: GET http://localhost:8081/api/accounts/{id}
+      Purpose: Get account details for a transaction
+      Used in: TransactionServiceImpl.getTransactionWithAccountInfo()
+
+COMMUNICATION METHOD: RestTemplate
+------------------------------------------------------------------------
+   - Defined as a @Bean in AppConfig.java of each service
+   - Injected into ServiceImpl classes via constructor injection
+   - Makes synchronous HTTP calls between services
+   - Error handling: try-catch wraps all inter-service calls
+   - If a service is down, a fallback response is returned (no crash)
+
+   Example from AccountServiceImpl:
+   try {
+       CustomerInfoDTO customerInfo = restTemplate.getForObject(
+           "http://localhost:8082/api/customers/" + customerId + "/info",
+           CustomerInfoDTO.class
+       );
+       response.setCustomerInfo(customerInfo);
+   } catch (Exception e) {
+       // Return account data even if customer service is unavailable
+       CustomerInfoDTO fallback = new CustomerInfoDTO();
+       fallback.setCustomerId(customerId);
+       response.setCustomerInfo(fallback);
+   }
+
+
+================================================================================
+9. CONTROLLER INFORMATION (ALL SERVICES)
+================================================================================
+
+ACCOUNTS CONTROLLER (AccountController.java)
+------------------------------------------------------------------------
+   Base URL: /api/accounts
+   Annotations: @RestController, @RequestMapping("/api/accounts")
+   Swagger Tag: "Accounts" - "Account Management APIs for Banking System"
+
+   Endpoints:
+   +--------+------------------------------------+---------------------------+
+   | Method | URL                                | Description               |
+   +--------+------------------------------------+---------------------------+
+   | POST   | /api/accounts                      | Create new account        |
+   | GET    | /api/accounts                      | Get all accounts          |
+   | GET    | /api/accounts/{id}                 | Get account by ID         |
+   | GET    | /api/accounts/number/{accountNum}  | Get by account number     |
+   | GET    | /api/accounts/customer/{custId}    | Get by customer ID        |
+   | PUT    | /api/accounts/{id}                 | Update account            |
+   | DELETE | /api/accounts/{id}                 | Delete account            |
+   | GET    | /api/accounts/{id}/with-customer   | Get with customer info    |
+   +--------+------------------------------------+---------------------------+
+
+AUTH CONTROLLER (AuthController.java) - Same for all 3 services
+------------------------------------------------------------------------
+   Base URL: /api/auth
+   Annotations: @RestController, @RequestMapping("/api/auth")
+
+   Endpoints:
+   +--------+--------------------+----------------------------------+
+   | Method | URL                | Description                      |
+   +--------+--------------------+----------------------------------+
+   | POST   | /api/auth/login    | Login and get JWT token          |
+   +--------+--------------------+----------------------------------+
+
+CUSTOMERS CONTROLLER (CustomerController.java)
+------------------------------------------------------------------------
+   Base URL: /api/customers
+   Annotations: @RestController, @RequestMapping("/api/customers")
+   Swagger Tag: "Customers" - "Customer Management APIs for Banking System"
+
+   Endpoints:
+   +--------+--------------------------------------+---------------------------+
+   | Method | URL                                  | Description               |
+   +--------+--------------------------------------+---------------------------+
+   | POST   | /api/customers                       | Register new customer     |
+   | GET    | /api/customers                       | Get all customers         |
+   | GET    | /api/customers/{id}                  | Get customer by ID        |
+   | GET    | /api/customers/email/{email}         | Get by email              |
+   | PUT    | /api/customers/{id}                  | Update customer           |
+   | DELETE | /api/customers/{id}                  | Delete customer           |
+   | GET    | /api/customers/{id}/info             | Get minimal info (S2S)    |
+   | GET    | /api/customers/{id}/with-accounts    | Get with accounts (S2S)   |
+   +--------+--------------------------------------+---------------------------+
+
+TRANSACTIONS CONTROLLER (TransactionController.java)
+------------------------------------------------------------------------
+   Base URL: /api/transactions
+   Annotations: @RestController, @RequestMapping("/api/transactions")
+   Swagger Tag: "Transactions" - "Transaction Management APIs for Banking System"
+
+   Endpoints:
+   +--------+-------------------------------------------+----------------------------+
+   | Method | URL                                       | Description                |
+   +--------+-------------------------------------------+----------------------------+
+   | POST   | /api/transactions                         | Create new transaction     |
+   | GET    | /api/transactions                         | Get all transactions       |
+   | GET    | /api/transactions/{id}                    | Get transaction by ID      |
+   | GET    | /api/transactions/account/{accountId}     | Get by account ID          |
+   | GET    | /api/transactions/status/{status}         | Get by status              |
+   | PUT    | /api/transactions/{id}                    | Update (PENDING/SCHEDULED) |
+   | DELETE | /api/transactions/{id}                    | Cancel transaction         |
+   | GET    | /api/transactions/{id}/with-account       | Get with account info (S2S)|
+   +--------+-------------------------------------------+----------------------------+
+
+
+================================================================================
+10. METHODS USED & HOW SERVICES CONNECT
+================================================================================
+
+LAYERED ARCHITECTURE (Same Pattern for All Services):
+------------------------------------------------------------------------
+
+   CONTROLLER LAYER -> @RestController
+     Methods: createAccount(), getAccountById(), getAllAccounts(),
+              updateAccount(), deleteAccount(), getAccountWithCustomerInfo()
+     Purpose: Receive HTTP requests, validate input, delegate to service
+     Annotations: @PostMapping, @GetMapping, @PutMapping, @DeleteMapping
+     Input: @RequestBody (JSON), @PathVariable (URL params)
+     Output: ResponseEntity<DTO>
+
+   SERVICE LAYER -> @Service (Interface + Implementation)
+     Interface: AccountService.java (defines method signatures)
+     Implementation: AccountServiceImpl.java (contains business logic)
+     Methods: createAccount(), getAccountById(), getAllAccounts(),
+              updateAccount(), deleteAccount(), getAccountWithCustomerInfo()
+     Injected Beans: Repository, Mapper, RestTemplate
+     Purpose: Business logic, validation rules, inter-service calls
+
+   DAO/REPOSITORY LAYER -> extends JpaRepository<Entity, Long>
+     Interface: AccountRepository.java
+     Methods (auto-generated by Spring Data JPA):
+       - save(entity)         -> INSERT or UPDATE
+       - findById(id)         -> SELECT WHERE id = ?
+       - findAll()            -> SELECT * FROM table
+       - deleteById(id)       -> DELETE WHERE id = ?
+       - existsById(id)       -> SELECT COUNT(*) WHERE id = ?
+     Custom Query Methods:
+       - findByAccountNumber(String) -> SELECT WHERE account_number = ?
+       - findByCustomerId(Long)      -> SELECT WHERE customer_id = ?
+       - existsByAccountNumber(String)
+
+   ENTITY LAYER -> @Entity
+     Java class mapped to MySQL table using JPA annotations:
+       @Table(name = "accounts")
+       @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+       @Column(name = "account_number", nullable = false, unique = true)
+
+   DTO LAYER -> Plain Java classes (no JPA annotations)
+     Purpose: Transfer data between layers without exposing entity
+     Validation: @NotBlank, @NotNull, @Size, @DecimalMin, @Email
+     Used in: Controller input/output, inter-service communication
+
+   MAPPER/UTIL LAYER -> @Component
+     Purpose: Convert Entity <-> DTO
+     Methods: toEntity(dto), toDTO(entity)
+     Uses: ModelMapper library (org.modelmapper)
+
+   CONFIG LAYER -> @Configuration
+     AppConfig.java:
+       @Bean ModelMapper modelMapper()   -> for DTO mapping
+       @Bean RestTemplate restTemplate() -> for inter-service HTTP calls
+       @Bean OpenAPI customOpenAPI()     -> Swagger documentation config
+     SecurityConfig.java:
+       @Bean SecurityFilterChain -> defines which URLs need auth
+       @Bean UserDetailsService  -> in-memory user (admin/admin123)
+       @Bean PasswordEncoder     -> BCryptPasswordEncoder
+       @Bean AuthenticationManager
+
+   EXCEPTION HANDLING -> @ControllerAdvice
+     GlobalExceptionHandler.java:
+       @ExceptionHandler(ResourceNotFoundException.class) -> 404
+       @ExceptionHandler(AccountAlreadyExistsException.class) -> 409
+       @ExceptionHandler(MethodArgumentNotValidException.class) -> 400
+       @ExceptionHandler(Exception.class) -> 500
+
+KEY METHODS IN SERVICE-TO-SERVICE CALLS:
+------------------------------------------------------------------------
+
+   RestTemplate.getForObject(url, ResponseType.class)
+     - Used for GET requests to other services
+     - Returns: deserialized Java object
+     - Example: restTemplate.getForObject(
+         "http://localhost:8082/api/customers/1/info", CustomerInfoDTO.class)
+
+   RestTemplate.exchange(url, HttpMethod.GET, null, ParameterizedTypeReference)
+     - Used for GET requests that return List<T>
+     - Example: restTemplate.exchange(
+         "http://localhost:8081/api/accounts/customer/1",
+         HttpMethod.GET, null,
+         new ParameterizedTypeReference<List<AccountSummaryDTO>>() {})
+
+
+================================================================================
+11. EUREKA & SERVICE DISCOVERY EXPLAINED
+================================================================================
+
+WHAT IS EUREKA?
+------------------------------------------------------------------------
+   Netflix Eureka is a service discovery server. In a microservices
+   architecture, services need to find and communicate with each other.
+   Instead of hardcoding IP addresses and ports, services register
+   themselves with Eureka, and other services look them up by name.
+
+HOW IT WORKS IN THIS PROJECT:
+------------------------------------------------------------------------
+
+   EUREKA SERVER (Port 8761):
+   - Runs as a standalone Spring Boot app with @EnableEurekaServer
+   - Acts as a registry/phone book for all services
+   - Dashboard: http://localhost:8761 (shows all registered services)
+   - Does NOT register itself (register-with-eureka=false)
+   - Does NOT fetch other registries (fetch-registry=false)
+
+   EUREKA CLIENTS (All Other Services):
+   - Each service includes spring-cloud-starter-netflix-eureka-client
+   - On startup, each service sends a registration request to Eureka
+   - Registration includes: service name, IP address, port
+   - Services send heartbeats every 30 seconds to stay registered
+   - If heartbeat stops, Eureka removes the service after 90 seconds
+
+   REGISTRATION FLOW:
+   1. Eureka Server starts on port 8761
+   2. Accounts Service starts on port 8081
+      -> Registers as "ACCOUNTS-SERVICE" with Eureka
+   3. Customers Service starts on port 8082
+      -> Registers as "CUSTOMERS-SERVICE" with Eureka
+   4. Transactions Service starts on port 8083
+      -> Registers as "TRANSACTIONS-SERVICE" with Eureka
+   5. API Gateway starts on port 8080
+      -> Registers as "API-GATEWAY" with Eureka
+      -> Uses Eureka to discover service locations for routing
+
+EUREKA DASHBOARD (http://localhost:8761):
+------------------------------------------------------------------------
+   When you open http://localhost:8761 in a browser, you see:
+
+   Instances currently registered with Eureka:
+   +------------------------+--------+-----------+--------+
+   | Application            | Status | AMIs      | Avail  |
+   +------------------------+--------+-----------+--------+
+   | ACCOUNTS-SERVICE       | UP(1)  | n/a       | 1      |
+   | API-GATEWAY            | UP(1)  | n/a       | 1      |
+   | CUSTOMERS-SERVICE      | UP(1)  | n/a       | 1      |
+   | TRANSACTIONS-SERVICE   | UP(1)  | n/a       | 1      |
+   +------------------------+--------+-----------+--------+
+
+HOW API GATEWAY USES EUREKA:
+------------------------------------------------------------------------
+   The API Gateway routes are configured with "lb://" prefix:
+      spring.cloud.gateway.routes[0].uri=lb://ACCOUNTS-SERVICE
+
+   "lb://" means "Load Balanced" - the gateway asks Eureka:
+      "Where is ACCOUNTS-SERVICE running?"
+   Eureka responds:
+      "It's at 192.168.1.5:8081"
+   Gateway forwards the request to that address.
+
+   If you run multiple instances of a service (e.g., two Accounts
+   services on ports 8081 and 8091), Eureka knows both instances
+   and the "lb://" prefix enables Spring Cloud LoadBalancer to
+   distribute requests between them (round-robin by default).
+
+CONFIGURATION FOR EUREKA CLIENT:
+------------------------------------------------------------------------
+   In each service's application.properties:
+
+   # Tell the service where Eureka Server is running
+   eureka.client.service-url.defaultZone=http://localhost:8761/eureka/
+
+   # Register with IP address instead of hostname
+   eureka.instance.prefer-ip-address=true
+
+   # Service name used for registration (from spring.application.name)
+   spring.application.name=accounts-service
+   -> Registers as "ACCOUNTS-SERVICE" (uppercase by convention)
+
+SERVICE STARTUP ORDER (IMPORTANT):
+------------------------------------------------------------------------
+   1. MySQL must be running            (database)
+   2. Eureka Server (8761)             (service registry - must start first)
+   3. Accounts Service (8081)          (order doesn't matter for 3-5)
+   4. Customers Service (8082)
+   5. Transactions Service (8083)
+   6. API Gateway (8080)               (can start anytime after Eureka)
+
+   If Eureka is not running, services will still start but will log
+   connection errors every 30 seconds until Eureka becomes available.
+   Once Eureka starts, services will automatically register.
+
+
+================================================================================
+12. POSTMAN OUTPUT FOR EACH SERVER
+================================================================================
+
+EUREKA SERVER (Port 8761):
+------------------------------------------------------------------------
+   No REST API to test. Open browser: http://localhost:8761
+   Shows: Dashboard with registered services, system status, uptime.
+
+API GATEWAY (Port 8080):
+------------------------------------------------------------------------
+   Routes requests to backend services. Example:
+
+   GET http://localhost:8080/api/accounts
+   -> Forwards to Accounts Service (8081)
+   -> Returns same response as calling 8081 directly
+
+   Response (200 OK):
+   [
+       {
+           "id": 1,
+           "accountNumber": "ACC-001",
+           "customerId": 1,
+           "type": "SAVINGS",
+           "balance": 5000.00,
+           "createdAt": "2026-02-15T23:55:58.725997"
+       }
+   ]
+
+ACCOUNTS SERVICE (Port 8081):
+------------------------------------------------------------------------
+   POST /api/auth/login -> {"token": "eyJhbGciOiJI..."}
+   POST /api/accounts   -> {"id":1,"accountNumber":"ACC-001","type":"SAVINGS","balance":5000.00,...}
+   GET  /api/accounts    -> [{"id":1,...}, {"id":2,...}]
+   GET  /api/accounts/1  -> {"id":1,"accountNumber":"ACC-001",...}
+   PUT  /api/accounts/1  -> {"id":1,"accountNumber":"ACC-001","type":"CURRENT","balance":7500.00,...}
+   DELETE /api/accounts/2 -> "Account deleted successfully with ID: 2"
+
+CUSTOMERS SERVICE (Port 8082):
+------------------------------------------------------------------------
+   POST /api/auth/login  -> {"token": "eyJhbGciOiJI..."}
+   POST /api/customers   -> {"id":1,"firstName":"Mahek","lastName":"Sharma","email":"mahek@example.com",...}
+   GET  /api/customers   -> [{"id":1,...}]
+   GET  /api/customers/1 -> {"id":1,"firstName":"Mahek",...}
+   PUT  /api/customers/1 -> {"id":1,"firstName":"Mahek","address":"Delhi, India",...}
+   DELETE /api/customers/1 -> "Customer deleted successfully with ID: 1"
+
+TRANSACTIONS SERVICE (Port 8083):
+------------------------------------------------------------------------
+   POST /api/auth/login    -> {"token": "eyJhbGciOiJI..."}
+   POST /api/transactions  -> {"id":1,"accountId":1,"type":"DEPOSIT","amount":1500.00,"status":"COMPLETED",...}
+   GET  /api/transactions  -> [{"id":1,...}]
+   GET  /api/transactions/1 -> {"id":1,"accountId":1,"type":"DEPOSIT",...}
+   PUT  /api/transactions/1 -> 400 error if COMPLETED (only PENDING/SCHEDULED allowed)
+   DELETE /api/transactions/1 -> "Transaction cancelled successfully with ID: 1"
+                                 (400 if already COMPLETED/SUCCESS)
+
+ERROR RESPONSES (Common Across All Services):
+------------------------------------------------------------------------
+   401 Unauthorized (Missing/Invalid JWT):
+   {
+       "timestamp": "2026-02-15T23:55:58",
+       "status": 401,
+       "error": "Unauthorized",
+       "message": "Full authentication is required"
+   }
+
+   404 Not Found:
+   {
+       "timestamp": "2026-02-15T23:55:58",
+       "status": 404,
+       "error": "Not Found",
+       "message": "Account not found with ID: 999"
+   }
+
+   400 Bad Request (Validation Error):
+   {
+       "timestamp": "2026-02-15T23:55:58",
+       "status": 400,
+       "error": "Bad Request",
+       "message": "Validation failed",
+       "fieldErrors": {
+           "accountNumber": "Account number is required",
+           "type": "Account type is required"
+       }
+   }
+
+   409 Conflict (Duplicate):
+   {
+       "timestamp": "2026-02-15T23:55:58",
+       "status": 409,
+       "error": "Conflict",
+       "message": "Account with number ACC-001 already exists"
+   }
+
+
+================================================================================
+13. SWAGGER UI LINKS
+================================================================================
+
+   Access Swagger UI in your browser to explore and test all APIs
+   interactively. Each service has its own Swagger documentation.
+
+   ACCOUNTS SERVICE:
+      Swagger UI:  http://localhost:8081/swagger-ui.html
+      API Docs:    http://localhost:8081/api-docs
+
+   CUSTOMERS SERVICE:
+      Swagger UI:  http://localhost:8082/swagger-ui.html
+      API Docs:    http://localhost:8082/api-docs
+
+   TRANSACTIONS SERVICE:
+      Swagger UI:  http://localhost:8083/swagger-ui.html
+      API Docs:    http://localhost:8083/api-docs
+
+   EUREKA DASHBOARD:
+      http://localhost:8761
+
+   NOTE: To test authenticated endpoints on Swagger UI:
+   1. First call POST /api/auth/login with {"username":"admin","password":"admin123"}
+   2. Copy the token from the response
+   3. Click "Authorize" button (lock icon) at the top of Swagger UI
+   4. Enter: Bearer <your_token>
+   5. Click "Authorize"
+   6. Now all endpoints will include the JWT token automatically
+
+
+================================================================================
+   END OF PROJECT GUIDE
+================================================================================
+   Total Services: 5 (Eureka, Gateway, Accounts, Customers, Transactions)
+   Total Databases: 3 (accountsdb, customersdb, transactionsdb - all MySQL)
+   Total Tables: 3 (accounts, customers, transactions - auto-created by Hibernate)
+   Total REST Endpoints: 27 (including auth and S2S endpoints)
+   Total Unit Tests: 43 (16 + 14 + 13)
+   Authentication: JWT (admin/admin123, 24-hour expiry)
+   Communication: RestTemplate (synchronous HTTP)
+   Service Discovery: Netflix Eureka
+   API Documentation: springdoc-openapi (Swagger UI)
+================================================================================

@@ -1,0 +1,1001 @@
+================================================================================
+   BANKING SYSTEM MICROSERVICES - COMPLETE TESTING GUIDE
+================================================================================
+   Project  : Banking System Microservices
+   Java     : 17  |  Spring Boot : 3.2.5
+   Testing  : JUnit 5 + Mockito + MockMvc + Spring Security Test
+================================================================================
+
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+  1.  OVERVIEW - What Testing Exists in This Project
+  2.  DOES THE PROJECT RUN TESTS AUTOMATICALLY ON STARTUP?
+  3.  HOW TO RUN TESTS (All Commands)
+  4.  HOW TO RUN TESTS IN IntelliJ IDEA (JUnit Jupiter)
+  5.  HOW THE TEST FILES ARE BUILT (Structure Explained)
+  6.  WHAT EACH TEST FILE DOES (Test-by-Test Breakdown)
+  7.  WHAT CAN CHANGE OR FAIL IN THE FUTURE?
+  8.  TECHNOLOGIES & ANNOTATIONS EXPLAINED
+  9.  COMPLETE TEST FILE LOCATIONS
+
+
+================================================================================
+1. OVERVIEW - WHAT TESTING EXISTS IN THIS PROJECT
+================================================================================
+
+There are 6 test files across 3 services:
+
+   ACCOUNTS SERVICE (16 tests):
+      - AccountServiceImplTest.java    ->  8 service layer tests
+      - AccountControllerTest.java     ->  8 controller layer tests
+
+   CUSTOMERS SERVICE (14 tests):
+      - CustomerServiceImplTest.java   ->  7 service layer tests
+      - CustomerControllerTest.java    ->  7 controller layer tests
+
+   TRANSACTIONS SERVICE (13 tests):
+      - TransactionServiceImplTest.java ->  7 service layer tests
+      - TransactionControllerTest.java  ->  6 controller layer tests
+
+   TOTAL: 43 unit/integration tests, all currently passing.
+
+   Eureka Server & API Gateway -> No tests (infrastructure services,
+   no custom business logic to test).
+
+TWO TYPES OF TESTS:
+------------------------------------------------------------------------
+   A) SERVICE LAYER TESTS (Pure Unit Tests)
+      -> Test the business logic inside *ServiceImpl.java
+      -> Mock the database (repository) so no real MySQL is needed
+      -> Mock the mapper so no real DTO conversion happens
+      -> Fast, isolated, no Spring context loaded
+
+   B) CONTROLLER LAYER TESTS (Integration Tests)
+      -> Test the REST endpoints (HTTP methods, URLs, status codes)
+      -> Load the full Spring Boot context (@SpringBootTest)
+      -> Mock the service layer so no real business logic runs
+      -> Test that JSON request/response works correctly
+      -> Test that security blocks unauthenticated requests
+
+
+================================================================================
+2. DOES THE PROJECT RUN TESTS AUTOMATICALLY ON STARTUP?
+================================================================================
+
+SHORT ANSWER: NO.
+
+   When you start the project using:
+      mvn spring-boot:run
+
+   It does NOT run tests. It only compiles and starts the application.
+
+   Tests are ONLY run when you explicitly ask Maven to run them.
+
+WHEN DO TESTS RUN AUTOMATICALLY?
+------------------------------------------------------------------------
+
+   A) "mvn test" -> RUNS tests only, does NOT create a JAR
+      This is the command specifically for running tests.
+
+   B) "mvn package" -> Compiles code, RUNS tests, then creates JAR
+      Tests run as part of the packaging process.
+      If any test fails, the JAR will NOT be created.
+
+   C) "mvn package -DskipTests" -> Compiles, creates JAR, SKIPS tests
+      We used this during development to build faster.
+
+   D) "mvn install" -> Same as package + installs JAR to local repo
+      Tests run here too.
+
+   E) "mvn spring-boot:run" -> Compiles and starts app. NO tests run.
+
+   F) "mvn verify" -> Runs all tests including integration tests.
+
+SUMMARY TABLE:
+------------------------------------------------------------------------
+   +----------------------------+------------------+
+   | Command                    | Runs Tests?      |
+   +----------------------------+------------------+
+   | mvn spring-boot:run        | NO               |
+   | mvn compile                | NO               |
+   | mvn test                   | YES              |
+   | mvn package                | YES              |
+   | mvn package -DskipTests    | NO (skipped)     |
+   | mvn install                | YES              |
+   | mvn verify                 | YES              |
+   | mvn clean                  | NO               |
+   +----------------------------+------------------+
+
+   So to be clear: Simply starting the project DOES NOT run tests.
+   You must explicitly run "mvn test" or "mvn package" (without -DskipTests).
+
+
+================================================================================
+3. HOW TO RUN TESTS (ALL COMMANDS)
+================================================================================
+
+PREREQUISITE: Be in the service directory, or specify path.
+Make sure Java 17 is active (sdkman: sdk use java 17.0.18-amzn).
+
+A) RUN ALL TESTS FOR ONE SERVICE:
+------------------------------------------------------------------------
+   cd accounts-service
+   mvn test
+
+   cd customers-service
+   mvn test
+
+   cd transactions-service
+   mvn test
+
+B) RUN ALL TESTS FOR ALL SERVICES (one command):
+------------------------------------------------------------------------
+   cd banking-system
+   cd accounts-service && mvn test && cd .. && \
+   cd customers-service && mvn test && cd .. && \
+   cd transactions-service && mvn test && cd ..
+
+C) RUN A SPECIFIC TEST CLASS:
+------------------------------------------------------------------------
+   cd accounts-service
+   mvn test -Dtest=AccountServiceImplTest
+
+   cd accounts-service
+   mvn test -Dtest=AccountControllerTest
+
+   cd customers-service
+   mvn test -Dtest=CustomerServiceImplTest
+
+   cd transactions-service
+   mvn test -Dtest=TransactionControllerTest
+
+D) RUN A SPECIFIC TEST METHOD:
+------------------------------------------------------------------------
+   mvn test -Dtest=AccountServiceImplTest#testCreateAccount_Success
+   mvn test -Dtest=AccountServiceImplTest#testGetAccountById_NotFound
+   mvn test -Dtest=AccountControllerTest#testUnauthorizedAccess
+   mvn test -Dtest=TransactionServiceImplTest#testDeleteTransaction_CompletedFails
+
+E) RUN MULTIPLE SPECIFIC TEST CLASSES:
+------------------------------------------------------------------------
+   mvn test -Dtest=AccountServiceImplTest,AccountControllerTest
+
+F) RUN TESTS WITH DETAILED OUTPUT:
+------------------------------------------------------------------------
+   mvn test -X                              (debug mode - very verbose)
+   mvn test -Dsurefire.useFile=false         (print output to console)
+
+G) RUN TESTS AND GENERATE REPORT:
+------------------------------------------------------------------------
+   mvn test
+   Then check: target/surefire-reports/
+   Files: TEST-com.banking.accounts.service.AccountServiceImplTest.xml
+
+H) EXPECTED OUTPUT WHEN ALL TESTS PASS:
+------------------------------------------------------------------------
+   [INFO] Tests run: 16, Failures: 0, Errors: 0, Skipped: 0
+   [INFO] BUILD SUCCESS
+
+   If a test fails:
+   [INFO] Tests run: 16, Failures: 1, Errors: 0, Skipped: 0
+   [INFO] BUILD FAILURE
+
+
+================================================================================
+4. HOW TO RUN TESTS IN IntelliJ IDEA (JUnit Jupiter)
+================================================================================
+
+DOES IntelliJ BUILD RUN ALL TESTS AUTOMATICALLY?
+------------------------------------------------------------------------
+   SHORT ANSWER: NO.
+
+   When you click the green "Run" button or press Shift+F10 to run
+   your Spring Boot application in IntelliJ, it does NOT run tests.
+   It only compiles and starts the application.
+
+   IntelliJ Build (Build -> Build Project / Ctrl+F9):
+      -> Only COMPILES the code (checks for syntax errors)
+      -> Does NOT run any tests
+      -> This is different from "mvn package" which does run tests
+
+   IntelliJ Run (Run -> Run 'Application' / Shift+F10):
+      -> Compiles + Starts the Spring Boot app
+      -> Does NOT run any tests
+
+   So tests in IntelliJ must ALWAYS be run manually/explicitly.
+
+------------------------------------------------------------------------
+HOW TO RUN TESTS IN IntelliJ IDEA:
+------------------------------------------------------------------------
+
+   METHOD 1: RUN ALL TESTS IN A SINGLE TEST FILE
+   -----------------------------------------------
+   1. Open the test file (e.g., AccountServiceImplTest.java)
+   2. Right-click anywhere in the file
+   3. Select "Run 'AccountServiceImplTest'"
+   4. OR press Ctrl+Shift+F10 (Windows/Linux) / Ctrl+Shift+R (Mac)
+   5. All 8 tests in that file will run
+
+   METHOD 2: RUN A SINGLE TEST METHOD
+   -----------------------------------------------
+   1. Open the test file
+   2. Find the test method you want to run (e.g., testCreateAccount_Success)
+   3. Click the GREEN ARROW (play icon) in the left gutter next to @Test
+   4. Select "Run 'testCreateAccount_Success'"
+   5. Only that one test runs
+
+   METHOD 3: RUN ALL TESTS IN A PACKAGE/FOLDER
+   -----------------------------------------------
+   1. In the Project Explorer (left panel)
+   2. Navigate to: src/test/java/com/banking/accounts/
+   3. Right-click the folder
+   4. Select "Run 'Tests in com.banking.accounts'"
+   5. All tests in that package (service + controller tests) run
+
+   METHOD 4: RUN ALL TESTS IN THE ENTIRE SERVICE
+   -----------------------------------------------
+   1. In the Project Explorer
+   2. Right-click the "src/test" folder (or "src/test/java")
+   3. Select "Run 'All Tests'"
+   4. Every test in that service module runs
+
+   METHOD 5: RUN ALL TESTS ACROSS ALL MODULES
+   -----------------------------------------------
+   1. Open IntelliJ Terminal (View -> Tool Windows -> Terminal)
+   2. Navigate to: cd banking-system/accounts-service
+   3. Type: mvn test
+   4. OR create a Run Configuration:
+      - Run -> Edit Configurations -> + -> Maven
+      - Working directory: accounts-service
+      - Command line: test
+      - Save and run
+
+   METHOD 6: RUN WITH MAVEN TOOL WINDOW
+   -----------------------------------------------
+   1. Open Maven Tool Window (View -> Tool Windows -> Maven)
+   2. Expand: accounts-service -> Lifecycle
+   3. Double-click "test"
+   4. All tests for that module run
+
+------------------------------------------------------------------------
+UNDERSTANDING THE IntelliJ TEST RESULTS WINDOW:
+------------------------------------------------------------------------
+
+   When tests run, IntelliJ shows a "Run" panel at the bottom:
+
+   +------------------------------------------------------------------+
+   | Run: AccountServiceImplTest                                       |
+   +------------------------------------------------------------------+
+   | v AccountServiceImplTest              8/8 passed    1.2s         |
+   |   v testCreateAccount_Success         PASSED        0.15s        |
+   |   v testCreateAccount_DuplicateAccNum PASSED        0.03s        |
+   |   v testGetAccountById_Found          PASSED        0.02s        |
+   |   v testGetAccountById_NotFound       PASSED        0.02s        |
+   |   v testGetAllAccounts                PASSED        0.03s        |
+   |   v testUpdateAccount_Success         PASSED        0.04s        |
+   |   v testDeleteAccount_Success         PASSED        0.02s        |
+   |   v testDeleteAccount_NotFound        PASSED        0.02s        |
+   +------------------------------------------------------------------+
+
+   GREEN CHECK (v) = Test passed
+   RED X (x)       = Test failed (click to see error details)
+   YELLOW (!)      = Test skipped
+
+   If a test fails, click on it to see:
+   - Expected value vs Actual value
+   - Stack trace showing exact line where it failed
+   - You can click the line number to jump directly to the code
+
+------------------------------------------------------------------------
+KEYBOARD SHORTCUTS (IntelliJ IDEA):
+------------------------------------------------------------------------
+
+   Windows/Linux:
+   +-----------------------------+-------------------------------+
+   | Action                      | Shortcut                      |
+   +-----------------------------+-------------------------------+
+   | Run current test file       | Ctrl + Shift + F10            |
+   | Re-run last test            | Shift + F10                   |
+   | Debug current test          | Ctrl + Shift + F9             |
+   | Run all tests (Maven)      | Open Terminal -> mvn test      |
+   | Stop running test           | Ctrl + F2                     |
+   +-----------------------------+-------------------------------+
+
+   macOS:
+   +-----------------------------+-------------------------------+
+   | Action                      | Shortcut                      |
+   +-----------------------------+-------------------------------+
+   | Run current test file       | Ctrl + Shift + R              |
+   | Re-run last test            | Ctrl + R                      |
+   | Debug current test          | Ctrl + Shift + D              |
+   | Run all tests (Maven)      | Open Terminal -> mvn test      |
+   | Stop running test           | Cmd + F2                      |
+   +-----------------------------+-------------------------------+
+
+------------------------------------------------------------------------
+DEBUGGING A FAILED TEST IN IntelliJ:
+------------------------------------------------------------------------
+
+   1. Open the test file
+   2. Click the GREEN ARROW next to the failing test
+   3. Select "Debug" instead of "Run"
+   4. Set breakpoints by clicking the left gutter (red dot appears)
+   5. The debugger will pause at your breakpoint
+   6. Inspect variables in the "Variables" panel
+   7. Step through code with:
+      - F8 = Step Over (next line)
+      - F7 = Step Into (go inside method)
+      - Shift+F8 = Step Out (exit method)
+      - F9 = Resume (continue to next breakpoint)
+
+------------------------------------------------------------------------
+IntelliJ vs TERMINAL - COMPARISON:
+------------------------------------------------------------------------
+
+   +---------------------------------------+-----------+-------------+
+   | Action                                | IntelliJ  | Terminal    |
+   +---------------------------------------+-----------+-------------+
+   | Run one test method                   | Click arrow| mvn -Dtest=|
+   | Run one test class                    | Right-click| mvn -Dtest=|
+   | Run all tests in service              | Right-click| mvn test   |
+   | Build project (no tests)              | Ctrl+F9   | mvn compile|
+   | Build JAR (with tests)                | Maven panel| mvn package|
+   | Build JAR (skip tests)                | Maven panel| mvn -DskipTests|
+   | Start application                     | Shift+F10 | mvn spring-boot:run|
+   | See test coverage                     | Run w/ Coverage| mvn jacoco|
+   +---------------------------------------+-----------+-------------+
+
+   KEY DIFFERENCE:
+   - IntelliJ "Build" (Ctrl+F9) = ONLY compile, NO tests
+   - Terminal "mvn package" = Compile + Run Tests + Create JAR
+   - IntelliJ "Run" (Shift+F10) = Compile + Start App, NO tests
+
+------------------------------------------------------------------------
+OPENING THE PROJECT IN IntelliJ IDEA:
+------------------------------------------------------------------------
+
+   1. Open IntelliJ IDEA
+   2. File -> Open
+   3. Navigate to: /Users/shreyanshchaubey/Desktop/Mahek Final/banking-system
+   4. Select the "banking-system" folder -> OK
+   5. IntelliJ will detect the Maven pom.xml files automatically
+   6. Wait for indexing to complete (progress bar at bottom)
+   7. If prompted "Import Maven Projects?" -> Click "Yes" / "Import"
+
+   IMPORTANT: Each service is a separate Maven module. IntelliJ will
+   show them all in the Project Explorer:
+   - eureka-server
+   - api-gateway
+   - accounts-service
+   - customers-service
+   - transactions-service
+
+   To run tests for a specific service, navigate to that module's
+   src/test/java folder.
+
+------------------------------------------------------------------------
+SETTING JAVA 17 IN IntelliJ:
+------------------------------------------------------------------------
+
+   If tests fail with "unsupported class version" errors:
+   1. File -> Project Structure -> Project
+   2. Set SDK: 17 (Amazon Corretto 17 or any Java 17)
+   3. Set Language Level: 17
+   4. Apply -> OK
+
+   Also set per module:
+   1. File -> Project Structure -> Modules
+   2. Select each module
+   3. Set Language Level: 17
+   4. Apply -> OK
+
+
+================================================================================
+5. HOW THE TEST FILES ARE BUILT (STRUCTURE EXPLAINED)
+================================================================================
+
+Every test class follows the same pattern. Here's how they are built:
+
+------------------------------------------------------------------------
+A) SERVICE LAYER TEST STRUCTURE (e.g., AccountServiceImplTest.java)
+------------------------------------------------------------------------
+
+   STEP 1: ANNOTATIONS ON THE CLASS
+   ---------------------------------
+   @ExtendWith(MockitoExtension.class)    -> tells JUnit 5 to use Mockito
+   class AccountServiceImplTest {         -> test class name = Class + "Test"
+
+   STEP 2: MOCK THE DEPENDENCIES
+   ---------------------------------
+   @Mock AccountRepository accountRepository;  -> fake database
+   @Mock AccountMapper accountMapper;           -> fake mapper
+   @Mock RestTemplate restTemplate;             -> fake HTTP client
+
+   @InjectMocks AccountServiceImpl accountService;  -> the REAL class being tested
+                                                    -> Mockito injects all @Mock objects into it
+
+   What this means:
+   - The accountService is the REAL business logic
+   - But its database, mapper, and HTTP client are all FAKE
+   - So we can test the logic WITHOUT needing MySQL, without needing
+     other services running, without any network calls
+
+   STEP 3: SET UP TEST DATA
+   ---------------------------------
+   @BeforeEach                             -> runs before EVERY test method
+   void setUp() {
+       sampleEntity = new Account();       -> create a fake Account entity
+       sampleEntity.setId(1L);
+       sampleEntity.setAccountNumber("NL91ABNA0417164300");
+       ...
+
+       sampleDTO = new AccountDTO();       -> create a fake DTO
+       sampleDTO.setId(1L);
+       ...
+   }
+
+   STEP 4: WRITE TEST METHODS
+   ---------------------------------
+   @Test                                   -> marks this as a test
+   @DisplayName("Create account - success") -> human-readable test name
+   void testCreateAccount_Success() {
+
+       // ARRANGE (setup mock behavior)
+       when(accountRepository.existsByAccountNumber(anyString())).thenReturn(false);
+       when(accountMapper.toEntity(any())).thenReturn(sampleEntity);
+       when(accountRepository.save(any())).thenReturn(sampleEntity);
+       when(accountMapper.toDTO(any())).thenReturn(sampleDTO);
+
+       // ACT (call the real method)
+       AccountDTO result = accountService.createAccount(sampleDTO);
+
+       // ASSERT (verify the result)
+       assertNotNull(result);
+       assertEquals("NL91ABNA0417164300", result.getAccountNumber());
+       verify(accountRepository, times(1)).save(any(Account.class));
+   }
+
+   The pattern is always: ARRANGE -> ACT -> ASSERT
+
+   ARRANGE: Tell the mocks what to return when called
+   ACT:     Call the real method you're testing
+   ASSERT:  Check the result is correct
+
+------------------------------------------------------------------------
+B) CONTROLLER LAYER TEST STRUCTURE (e.g., AccountControllerTest.java)
+------------------------------------------------------------------------
+
+   STEP 1: ANNOTATIONS ON THE CLASS
+   ---------------------------------
+   @SpringBootTest                -> loads the FULL Spring Boot application context
+   @AutoConfigureMockMvc          -> provides MockMvc for simulating HTTP requests
+   class AccountControllerTest {
+
+   STEP 2: INJECT TEST TOOLS
+   ---------------------------------
+   @Autowired MockMvc mockMvc;         -> simulates HTTP requests without a real server
+   @MockBean AccountService accountService;  -> replaces the REAL service with a mock
+
+   Note: @MockBean is different from @Mock
+   - @Mock = Mockito creates a fake (no Spring context)
+   - @MockBean = Spring replaces the real bean in the context with a fake
+
+   STEP 3: SET UP TEST DATA (same as service tests)
+   ---------------------------------
+   ObjectMapper objectMapper;     -> converts Java objects to JSON strings
+   AccountDTO sampleAccount;      -> sample data for testing
+
+   STEP 4: WRITE TEST METHODS
+   ---------------------------------
+   @Test
+   @WithMockUser(username = "admin", roles = {"ADMIN"})  -> simulates logged-in user
+   @DisplayName("POST /api/accounts - Create account with valid data")
+   void testCreateAccount_ValidData() throws Exception {
+
+       // ARRANGE
+       when(accountService.createAccount(any())).thenReturn(sampleAccount);
+
+       // ACT + ASSERT (combined with MockMvc)
+       mockMvc.perform(post("/api/accounts")                    -> simulate POST request
+               .contentType(MediaType.APPLICATION_JSON)          -> set Content-Type header
+               .content(objectMapper.writeValueAsString(sampleAccount)))  -> send JSON body
+           .andExpect(status().isCreated())                        -> expect 201 status
+           .andExpect(jsonPath("$.accountNumber").value("NL91...")) -> expect field in response
+           .andExpect(jsonPath("$.type").value("Savings"));        -> expect field in response
+   }
+
+   SECURITY TEST (no @WithMockUser):
+   ---------------------------------
+   @Test
+   void testUnauthorizedAccess() throws Exception {
+       mockMvc.perform(get("/api/accounts"))
+               .andExpect(status().isForbidden());    -> expect 403 without auth
+   }
+
+   This test proves that security is working: without a JWT token,
+   the API refuses access.
+
+
+================================================================================
+6. WHAT EACH TEST FILE DOES (TEST-BY-TEST BREAKDOWN)
+================================================================================
+
+------------------------------------------------------------------------
+FILE 1: AccountServiceImplTest.java (8 tests)
+------------------------------------------------------------------------
+Location: accounts-service/src/test/java/com/banking/accounts/service/
+
+Test 1: testCreateAccount_Success
+   What it does: Creates an account when account number doesn't exist
+   Mocks: Repository returns false for existsByAccountNumber
+   Asserts: Account is saved, returned DTO is not null, has correct number
+   Verifies: accountRepository.save() was called exactly 1 time
+
+Test 2: testCreateAccount_DuplicateAccountNumber
+   What it does: Tries to create account with existing account number
+   Mocks: Repository returns TRUE for existsByAccountNumber
+   Asserts: Throws AccountAlreadyExistsException
+   Purpose: Ensures no duplicate accounts can be created
+
+Test 3: testGetAccountById_Found
+   What it does: Fetches account by ID when it exists
+   Mocks: Repository returns Optional.of(sampleEntity) for findById(1)
+   Asserts: Result is not null, ID matches
+
+Test 4: testGetAccountById_NotFound
+   What it does: Fetches account by ID that doesn't exist
+   Mocks: Repository returns Optional.empty() for findById(99)
+   Asserts: Throws ResourceNotFoundException
+
+Test 5: testGetAllAccounts
+   What it does: Retrieves all accounts from database
+   Mocks: Repository returns list with 1 account
+   Asserts: Result list size is 1
+
+Test 6: testUpdateAccount_Success
+   What it does: Updates an existing account
+   Mocks: Repository find returns the entity, save returns updated
+   Asserts: Result is not null, save was called
+
+Test 7: testDeleteAccount_Success
+   What it does: Deletes an account that exists
+   Mocks: Repository returns true for existsById(1)
+   Asserts: deleteById(1) was called exactly once
+
+Test 8: testDeleteAccount_NotFound
+   What it does: Tries to delete account that doesn't exist
+   Mocks: Repository returns false for existsById(99)
+   Asserts: Throws ResourceNotFoundException
+
+------------------------------------------------------------------------
+FILE 2: AccountControllerTest.java (8 tests)
+------------------------------------------------------------------------
+Location: accounts-service/src/test/java/com/banking/accounts/controller/
+
+Test 1: testCreateAccount_ValidData
+   Endpoint: POST /api/accounts
+   Auth: @WithMockUser(admin, ADMIN)
+   Sends: Valid JSON body with all required fields
+   Expects: 201 Created, response has accountNumber and type
+
+Test 2: testCreateAccount_InvalidData
+   Endpoint: POST /api/accounts
+   Auth: @WithMockUser
+   Sends: Empty AccountDTO (missing all required fields)
+   Expects: 400 Bad Request (validation fails on @NotBlank, @NotNull)
+
+Test 3: testGetAccountById
+   Endpoint: GET /api/accounts/1
+   Auth: @WithMockUser
+   Expects: 200 OK, response has correct accountNumber
+
+Test 4: testGetAllAccounts
+   Endpoint: GET /api/accounts
+   Auth: @WithMockUser
+   Expects: 200 OK, response is array with length 1
+
+Test 5: testUpdateAccount
+   Endpoint: PUT /api/accounts/1
+   Auth: @WithMockUser
+   Sends: Updated balance (10000.00)
+   Expects: 200 OK, response has new balance
+
+Test 6: testDeleteAccount
+   Endpoint: DELETE /api/accounts/1
+   Auth: @WithMockUser
+   Expects: 200 OK
+
+Test 7: testUnauthorizedAccess
+   Endpoint: GET /api/accounts
+   Auth: NONE (no @WithMockUser)
+   Expects: 403 Forbidden
+   Purpose: Proves JWT security blocks unauthenticated requests
+
+Test 8: testCreateAccount_NegativeBalance
+   Endpoint: POST /api/accounts
+   Auth: @WithMockUser
+   Sends: Account with balance = -100.00
+   Expects: 400 Bad Request (validation: @DecimalMin("0.0"))
+
+------------------------------------------------------------------------
+FILE 3: CustomerServiceImplTest.java (7 tests)
+------------------------------------------------------------------------
+Location: customers-service/src/test/java/com/banking/customers/service/
+
+Test 1: testCreateCustomer_Success
+   -> Creates customer when email is unique
+   -> Verifies save() called once
+
+Test 2: testCreateCustomer_DuplicateEmail
+   -> Tries to create customer with existing email
+   -> Throws CustomerAlreadyExistsException
+
+Test 3: testGetCustomerById_Found
+   -> Fetches customer by ID, returns correct data
+
+Test 4: testGetCustomerById_NotFound
+   -> Fetches non-existent customer
+   -> Throws ResourceNotFoundException
+
+Test 5: testGetAllCustomers
+   -> Returns list of all customers
+
+Test 6: testDeleteCustomer_Success
+   -> Deletes existing customer, verifies deleteById called
+
+Test 7: testDeleteCustomer_NotFound
+   -> Tries to delete non-existent customer
+   -> Throws ResourceNotFoundException
+
+------------------------------------------------------------------------
+FILE 4: CustomerControllerTest.java (7 tests)
+------------------------------------------------------------------------
+Location: customers-service/src/test/java/com/banking/customers/controller/
+
+Test 1: testCreateCustomer_ValidData
+   -> POST /api/customers with valid data -> 201 Created
+
+Test 2: testCreateCustomer_InvalidEmail
+   -> POST with email = "invalid-email" (no @) -> 400 Bad Request
+
+Test 3: testGetCustomerById
+   -> GET /api/customers/1 -> 200 OK with firstName "Jordan"
+
+Test 4: testGetAllCustomers
+   -> GET /api/customers -> 200 OK, array length 1
+
+Test 5: testUpdateCustomer
+   -> PUT /api/customers/1 with new phone -> 200 OK
+
+Test 6: testDeleteCustomer
+   -> DELETE /api/customers/1 -> 200 OK
+
+Test 7: testCreateCustomer_MissingFields
+   -> POST with empty body -> 400 Bad Request
+
+------------------------------------------------------------------------
+FILE 5: TransactionServiceImplTest.java (7 tests)
+------------------------------------------------------------------------
+Location: transactions-service/src/test/java/com/banking/transactions/service/
+
+Test 1: testCreateTransaction_Success
+   -> Creates a new DEPOSIT transaction
+   -> Verifies mapper and save are called
+
+Test 2: testGetTransactionById_Found
+   -> Fetches transaction by ID
+
+Test 3: testGetTransactionById_NotFound
+   -> Throws ResourceNotFoundException for ID 99
+
+Test 4: testGetTransactionsByAccountId
+   -> Fetches all transactions for account 2002
+   -> Returns list size 1
+
+Test 5: testDeleteTransaction_CompletedFails
+   -> Tries to cancel a SUCCESS transaction
+   -> Throws InvalidTransactionException
+   -> BUSINESS RULE: Completed transactions cannot be cancelled
+
+Test 6: testDeleteTransaction_PendingSuccess
+   -> Cancels a PENDING transaction
+   -> Verifies status changed to "CANCELLED"
+   -> Verifies save() called
+
+Test 7: testUpdateTransaction_CompletedFails
+   -> Tries to update a SUCCESS transaction
+   -> Throws InvalidTransactionException
+   -> BUSINESS RULE: Only PENDING/SCHEDULED can be updated
+
+------------------------------------------------------------------------
+FILE 6: TransactionControllerTest.java (6 tests)
+------------------------------------------------------------------------
+Location: transactions-service/src/test/java/com/banking/transactions/controller/
+
+Test 1: testCreateTransaction_ValidData
+   -> POST /api/transactions -> 201 Created, type = "Deposit"
+
+Test 2: testGetTransactionById
+   -> GET /api/transactions/1 -> 200 OK
+
+Test 3: testGetAllTransactions
+   -> GET /api/transactions -> 200 OK, array length 1
+
+Test 4: testGetTransactionsByAccountId
+   -> GET /api/transactions/account/2002 -> 200 OK, array length 1
+
+Test 5: testDeleteTransaction
+   -> DELETE /api/transactions/1 -> 200 OK
+
+Test 6: testCreateTransaction_MissingFields
+   -> POST with empty body -> 400 Bad Request
+
+
+================================================================================
+7. WHAT CAN CHANGE OR FAIL IN THE FUTURE?
+================================================================================
+
+Right now all 43 tests pass. But here are specific scenarios where
+tests would START FAILING if you make certain changes:
+
+------------------------------------------------------------------------
+SCENARIO 1: You add a new required field to an Entity/DTO
+------------------------------------------------------------------------
+   Example: You add "currency" field to Account with @NotBlank
+
+   What breaks:
+   - AccountControllerTest: testCreateAccount_ValidData FAILS
+     Because the sample account in setUp() doesn't set "currency"
+     So @Valid rejects it -> returns 400 instead of expected 201
+
+   - AccountServiceImplTest: testCreateAccount_Success may FAIL
+     if business logic validates currency before saving
+
+   Fix: Update setUp() in both test files to include the new field:
+     sampleAccount.setCurrency("INR");
+
+------------------------------------------------------------------------
+SCENARIO 2: You change a URL/endpoint path
+------------------------------------------------------------------------
+   Example: Change /api/accounts to /api/v2/accounts
+
+   What breaks:
+   - EVERY controller test that uses "/api/accounts" FAILS
+     mockMvc.perform(get("/api/accounts")) -> 404 Not Found
+     Expected 200, got 404
+
+   Fix: Update all URL strings in controller test files
+
+------------------------------------------------------------------------
+SCENARIO 3: You change the HTTP status code returned
+------------------------------------------------------------------------
+   Example: Change createAccount() to return 200 OK instead of 201 Created
+
+   What breaks:
+   - testCreateAccount_ValidData FAILS
+     .andExpect(status().isCreated())  -> expected 201, got 200
+
+   Fix: Change the assertion:
+     .andExpect(status().isOk())
+
+------------------------------------------------------------------------
+SCENARIO 4: You rename a method in the Service interface
+------------------------------------------------------------------------
+   Example: Rename createAccount() to addNewAccount()
+
+   What breaks:
+   - AccountServiceImplTest: testCreateAccount_Success FAILS
+     at compilation: accountService.createAccount() doesn't exist
+
+   - AccountControllerTest: @MockBean still mocks AccountService
+     but controller now calls addNewAccount(), mock doesn't intercept it
+
+   Fix: Rename method in tests too
+
+------------------------------------------------------------------------
+SCENARIO 5: You change business validation rules
+------------------------------------------------------------------------
+   Example: Allow cancelling SUCCESS transactions (remove the check)
+
+   What breaks:
+   - testDeleteTransaction_CompletedFails FAILS
+     Test expects InvalidTransactionException, but now it doesn't throw
+
+   Fix: Remove or update that test to match new business rules
+
+------------------------------------------------------------------------
+SCENARIO 6: You change the exception type thrown
+------------------------------------------------------------------------
+   Example: Change ResourceNotFoundException to EntityNotFoundException
+
+   What breaks:
+   - testGetAccountById_NotFound FAILS
+     assertThrows(ResourceNotFoundException.class, ...) -> wrong exception
+
+   Fix: Change the assertion to new exception class
+
+------------------------------------------------------------------------
+SCENARIO 7: You add security to Notification Service
+------------------------------------------------------------------------
+   Example: Add JWT auth to notification endpoints
+
+   What breaks:
+   - TransactionServiceImplTest won't break (RestTemplate is mocked)
+   - But manual/Postman tests will fail (need token for notifications)
+
+------------------------------------------------------------------------
+SCENARIO 8: You change the DTO field names (JSON property names)
+------------------------------------------------------------------------
+   Example: Rename "accountNumber" to "accNo" in AccountDTO
+
+   What breaks:
+   - testCreateAccount_ValidData FAILS
+     .andExpect(jsonPath("$.accountNumber").value(...)) -> field not found
+     Because JSON now has "accNo" instead of "accountNumber"
+
+   Fix: Update jsonPath assertions: jsonPath("$.accNo")
+
+------------------------------------------------------------------------
+SCENARIO 9: You change the mapper logic
+------------------------------------------------------------------------
+   Example: AccountMapper now sets balance to 0 on creation
+
+   What breaks:
+   - Service tests use mocked mapper, so they WON'T break
+     (the mock always returns what you tell it to)
+   - But REAL application behavior will change
+   - You need to add a new INTEGRATION test that uses real mapper
+
+------------------------------------------------------------------------
+SCENARIO 10: You upgrade Spring Boot version
+------------------------------------------------------------------------
+   Example: Spring Boot 3.2.5 -> 4.0.0
+
+   What MIGHT break:
+   - @MockBean is deprecated in newer versions (use @MockitoBean)
+   - Security defaults may change (403 vs 401 for unauthenticated)
+   - Test annotations may move packages
+
+   Fix: Follow Spring Boot migration guide
+
+------------------------------------------------------------------------
+SCENARIO 11: You change validation annotations
+------------------------------------------------------------------------
+   Example: Remove @DecimalMin("0.0") from balance in AccountDTO
+
+   What breaks:
+   - testCreateAccount_NegativeBalance FAILS
+     Test expects 400 Bad Request, but now negative balance is accepted (200)
+
+   Fix: Remove that test or change the expectation
+
+------------------------------------------------------------------------
+SUMMARY: Your tests will fail when you change:
+------------------------------------------------------------------------
+   - Entity/DTO fields (add, remove, rename)
+   - URL paths or HTTP methods
+   - Response status codes
+   - Business validation rules
+   - Exception types
+   - Security configuration
+   - JSON field names
+   - Method signatures
+
+   This is actually GOOD. Tests are supposed to fail when behavior
+   changes - it alerts you that something has changed and you need
+   to decide if the change is intentional or a bug.
+   This is called "regression testing."
+
+
+================================================================================
+8. TECHNOLOGIES & ANNOTATIONS EXPLAINED
+================================================================================
+
+TESTING FRAMEWORK: JUnit 5 (Jupiter)
+------------------------------------------------------------------------
+   @Test                        -> Marks a method as a test case
+   @DisplayName("...")          -> Human-readable name shown in test results
+   @BeforeEach                  -> Method runs before EVERY test method
+   @BeforeAll                   -> Method runs once before ALL tests in class
+   @ExtendWith(...)             -> Registers an extension (e.g., Mockito)
+   @Disabled                    -> Skip this test temporarily
+
+MOCKING FRAMEWORK: Mockito
+------------------------------------------------------------------------
+   @Mock                        -> Creates a fake implementation of an interface
+   @InjectMocks                 -> Creates real object, injects all @Mocks into it
+   @MockBean                    -> Spring version: replaces real bean with mock
+
+   when(mock.method()).thenReturn(value)  -> "When this method is called, return this"
+   when(mock.method()).thenThrow(ex)      -> "When called, throw this exception"
+   verify(mock, times(1)).method()        -> "Verify this method was called exactly once"
+   doNothing().when(mock).method()        -> "Do nothing when void method is called"
+   any(), anyString(), eq(value)          -> Argument matchers for flexible matching
+
+ASSERTIONS: JUnit 5
+------------------------------------------------------------------------
+   assertNotNull(result)                  -> Result must not be null
+   assertEquals(expected, actual)         -> Values must match
+   assertThrows(Exception.class, () -> ...) -> Code must throw this exception
+   assertTrue(condition)                  -> Condition must be true
+   assertFalse(condition)                 -> Condition must be false
+
+SPRING TEST:
+------------------------------------------------------------------------
+   @SpringBootTest              -> Loads full Spring application context for testing
+   @AutoConfigureMockMvc        -> Auto-configures MockMvc for HTTP request simulation
+   @WithMockUser                -> Simulates an authenticated user (bypasses JWT)
+   MockMvc                      -> Simulates HTTP requests without starting a real server
+
+MOCKMVC METHODS:
+------------------------------------------------------------------------
+   mockMvc.perform(get("/url"))           -> Simulate GET request
+   mockMvc.perform(post("/url"))          -> Simulate POST request
+   .contentType(MediaType.APPLICATION_JSON)  -> Set Content-Type header
+   .content(jsonString)                      -> Set request body
+   .andExpect(status().isOk())               -> Assert HTTP 200
+   .andExpect(status().isCreated())          -> Assert HTTP 201
+   .andExpect(status().isBadRequest())       -> Assert HTTP 400
+   .andExpect(status().isForbidden())        -> Assert HTTP 403
+   .andExpect(jsonPath("$.field").value(val)) -> Assert JSON field value
+   .andExpect(jsonPath("$.length()").value(n)) -> Assert array length
+
+   IMPORTANT: MockMvc does NOT start a real HTTP server. It simulates
+   the entire Spring MVC pipeline (filters, controllers, serialization)
+   in-memory. This is much faster than starting a real server.
+
+
+================================================================================
+9. COMPLETE TEST FILE LOCATIONS
+================================================================================
+
+   banking-system/
+   |
+   +-- accounts-service/
+   |   +-- src/test/java/com/banking/accounts/
+   |       +-- service/
+   |       |   +-- AccountServiceImplTest.java     (8 tests)
+   |       +-- controller/
+   |           +-- AccountControllerTest.java       (8 tests)
+   |
+   +-- customers-service/
+   |   +-- src/test/java/com/banking/customers/
+   |       +-- service/
+   |       |   +-- CustomerServiceImplTest.java    (7 tests)
+   |       +-- controller/
+   |           +-- CustomerControllerTest.java      (7 tests)
+   |
+   +-- transactions-service/
+       +-- src/test/java/com/banking/transactions/
+           +-- service/
+           |   +-- TransactionServiceImplTest.java (7 tests)
+           +-- controller/
+               +-- TransactionControllerTest.java   (6 tests)
+
+   Total: 6 test files, 43 test methods
+
+
+================================================================================
+   QUICK REFERENCE COMMANDS
+================================================================================
+
+   -- TERMINAL / MAVEN --
+   Run all tests (one service):     cd accounts-service && mvn test
+   Run one test class:              mvn test -Dtest=AccountServiceImplTest
+   Run one test method:             mvn test -Dtest=AccountServiceImplTest#testCreateAccount_Success
+   Run tests + build JAR:           mvn package
+   Build without tests:             mvn package -DskipTests
+   Start app (NO tests):            mvn spring-boot:run
+   View test reports:               cat target/surefire-reports/*.txt
+
+   -- IntelliJ IDEA --
+   Run all tests in a class:        Right-click test file -> Run
+   Run one test method:             Click green arrow next to @Test
+   Run all tests in a service:      Right-click src/test/java -> Run All Tests
+   Keyboard shortcut:               Ctrl+Shift+F10 (Windows) / Ctrl+Shift+R (Mac)
+
+================================================================================
+   END OF TESTING GUIDE
+================================================================================
